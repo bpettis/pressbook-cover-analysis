@@ -3,6 +3,7 @@ output*
 
 *.csv
 *.png
+*.json
 output.csv
 output.png
 venv/*
