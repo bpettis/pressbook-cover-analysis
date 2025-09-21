@@ -15,6 +15,8 @@ parser = argparse.ArgumentParser(description='Evaluate the brightness and contra
 parser.add_argument('--studio', '-s', required=False, help='specify the name of a studio to search for')
 parser.add_argument('--limit', '-l', required=False, type=int, help="Limit the number of covers to search for. If specified, only the first X results will be plotted.")
 parser.add_argument('--mode', '-m', required=False, type=int, help="Specify the graphing mode. Omit to default to (1). \n\nModes: (1) - X: Brightness Y: Contrast (2) - X: Year Y: Brightness")
+parser.add_argument('--csv-only', '-c', required=False, action='store_false', help='Only write the CSV file and exit without creating an image.')
+parser.add_argument('--output', '-o', required=False, help='Specify the name of the output files. Omit to default to (output.csv) and (output.png)')
 args = parser.parse_args()
 
 
@@ -27,21 +29,31 @@ BIGGER_SIZE = 18
 WIDTH_INCHES = 50
 HEIGHT_INCHES = 30
 
+csvName = 'output.csv'
+pngName = 'output.png'
+if args.output:
+    csvName = str(args.output) + '.csv'
+    pngName = str(args.output) + '.png'
+
 def main():
     imageArray = []
-    studio = args.studio
+    studio = args.studio        
+        
     setup_csv()
     search(imageArray, studio)
-    plot(imageArray)
+    if args.csv_only:
+        return
+    else:
+        plot(imageArray)
 
 def setup_csv():
     row = ['identifier', 'year', 'url', 'brightness', 'contrast']
-    with open('output.csv', 'w') as csvfile:
+    with open(csvName, 'w') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(row)
 
 def write_row(row):
-    with open('output.csv', 'a') as csvfile:
+    with open(csvName, 'a') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(row)
 
@@ -94,7 +106,10 @@ def search(array, studio):
 
 def download(url):
     response = requests.get(url)
-    return response.content
+    if response.ok:
+        return response.content
+    else:
+        return None
 
 def calcBrightness( im_file ):
    # https://stackoverflow.com/questions/3490727/what-are-some-methods-to-analyze-image-brightness-using-python
@@ -125,8 +140,11 @@ def calcContrast (image):
 def getImage(path, zoom=1):
     # Swap out the 250 pixels from the earlier request to a much smaller image to put on the chart
     path = path.replace('w250', 'w25')
-    im = Image.open(BytesIO(download(path)))
-    return OffsetImage(im, zoom=zoom)
+    try:
+        im = Image.open(BytesIO(download(path)))
+        return OffsetImage(im, zoom=zoom)
+    except:
+        return None
 
 def plot(array):
     x = []
@@ -157,8 +175,8 @@ def plot(array):
     if args.mode == 2:
         plt.xlabel("Year")
         plt.ylabel("Brightness")
-        plt.xlim([1925, 1970])
-        plt.ylim([-50, 200])
+        plt.xlim([1900, 2000])
+        plt.ylim([0, 300])
     else:
         plt.xlabel("Brightness")
         plt.ylabel("Contrast")
@@ -183,7 +201,11 @@ def plot(array):
     print('Adding images')
     for x0, y0, path in zip(x, y, images):
         try:
-            ab = AnnotationBbox(getImage(path), (x0, y0), frameon=False)
+            image = getImage(path)
+            if image is None:
+                print(f'{path} : Couldn\'t get image. Skipping to the next one.')
+                continue
+            ab = AnnotationBbox(image, (x0, y0), frameon=False)
             ax.add_artist(ab)
         except Exception as e:
             print(f'Something went wrong plotting this image: {path}')
@@ -194,7 +216,7 @@ def plot(array):
 
     
     # Save the output
-    plt.savefig("output.png", dpi=150)
+    plt.savefig(pngName, dpi=150)
 
 if __name__ == "__main__":
     main()
