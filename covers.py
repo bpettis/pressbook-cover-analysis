@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import internetarchive
 import math
 import requests
@@ -9,13 +11,15 @@ from io import BytesIO
 from PIL import Image, ImageStat
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import json
 
 
 parser = argparse.ArgumentParser(description='Evaluate the brightness and contrast of specified MHDL pressbook covers.')
 parser.add_argument('--studio', '-s', required=False, help='specify the name of a studio to search for')
 parser.add_argument('--limit', '-l', required=False, type=int, help="Limit the number of covers to search for. If specified, only the first X results will be plotted.")
 parser.add_argument('--mode', '-m', required=False, type=int, help="Specify the graphing mode. Omit to default to (1). \n\nModes: (1) - X: Brightness Y: Contrast (2) - X: Year Y: Brightness")
-parser.add_argument('--csv-only', '-c', required=False, action='store_false', help='Only write the CSV file and exit without creating an image.')
+parser.add_argument('--csv-only', '-c', required=False, action='store_true', help='Only write the CSV file and exit without creating an image.')
+parser.add_argument('--write-json', '-j', required=False, action='store_true', help='Write a JSON file with your data as well. Omit to default to (False).')
 parser.add_argument('--output', '-o', required=False, help='Specify the name of the output files. Omit to default to (output.csv) and (output.png)')
 args = parser.parse_args()
 
@@ -31,9 +35,11 @@ HEIGHT_INCHES = 30
 
 csvName = 'output.csv'
 pngName = 'output.png'
+jsonName = 'output.json'
 if args.output:
     csvName = str(args.output) + '.csv'
     pngName = str(args.output) + '.png'
+    jsonName = str(args.output) + '.json'
 
 def main():
     imageArray = []
@@ -41,13 +47,19 @@ def main():
         
     setup_csv()
     search(imageArray, studio)
+    
+    if args.write_json:
+        write_json(imageArray)
+    
     if args.csv_only:
+        print('CSV file created. Skipping creating image...')
         return
     else:
+        print('Creating image...')
         plot(imageArray)
 
 def setup_csv():
-    row = ['identifier', 'year', 'url', 'brightness', 'contrast']
+    row = ['identifier', 'year', 'url', 'brightness', 'contrast', 'creator', 'title']
     with open(csvName, 'w') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(row)
@@ -56,6 +68,24 @@ def write_row(row):
     with open(csvName, 'a') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(row)
+
+def write_json(array):
+    
+    # Convert the array to a list of dictionaries, which will make for a more usable JSON file
+    newarray = []
+    for item in array:
+        custom_keys = ['identifier', 'year', 'url', 'brightness', 'contrast', 'creator', 'title']
+
+        # Ensure the number of keys matches the number of values
+        if len(item) != len(custom_keys):
+            raise ValueError("Number of values and custom keys must be equal.")
+
+        result_dict = dict(zip(custom_keys, item))
+        newarray.append(result_dict)
+        
+    json_string_pretty = json.dumps(newarray, indent=4)
+    with open(jsonName, 'w') as outfile:
+        outfile.write(json_string_pretty)
 
 def search(array, studio):
     
@@ -84,6 +114,8 @@ def search(array, studio):
             image = download(url)
             brightness = calcBrightness(image)
             contrast = calcContrast(image)
+            creator = i.item_metadata['metadata']['creator']
+            title = i.item_metadata['metadata']['title']
 
             # Extract the Year
             # 1965-01-01T23:23:59Z
@@ -93,7 +125,7 @@ def search(array, studio):
 
 
             print(f'{identifier} ({str(year)}): Brightness: {str(brightness)} Contrast: {str(contrast)}')
-            arrayEntry = [identifier, year, url, brightness, contrast]
+            arrayEntry = [identifier, year, url, brightness, contrast, creator, title]
             array.append(arrayEntry)
             write_row(arrayEntry)
 
