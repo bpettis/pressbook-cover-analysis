@@ -3,3 +3,5 @@ output*
 
 *.csv
 *.png
+output.csv
+output.png
