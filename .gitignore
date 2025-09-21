@@ -1,0 +1,8 @@
+# Ignore the output files:
+output*
+
+*.csv
+*.png
+output.csv
+output.png
+venv/*
