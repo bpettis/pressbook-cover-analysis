@@ -1,0 +1,156 @@
+<div class="row" id="plot-container" style="position: relative;">
+    <div id="plot"></div>
+    <div id="custom-tooltip" style="max-width: 500px; position: absolute; display: none; pointer-events: none; background: white; border: 1px solid #ccc; padding: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 10;">
+
+        <div id="tooltip-header" style="cursor: move; font-weight: bold; margin-bottom: 5px;">
+            Pressbook Details
+            <button id="tooltip-close" style="float: right;">×</button>
+        </div>
+
+        <img id="tooltip-img" src="" style="width: 350px; height: auto; margin-bottom: 5px;" />
+        <div id="tooltip-text"></div>
+    </div>
+</div>
+
+<script type="module">
+
+import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm";
+import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+const response = await fetch('pressbooks_500.json'); // Replace with the path to your JSON file
+const data = await response.json();
+console.log(data);
+const plot = Plot.plot({
+    grid: true,
+    nice: true,
+    x: {
+        label: "Year",
+        domain: [new Date("1910"), new Date("2025")] // Specify the lower and upper bounds of the chart
+    },
+    y: {
+        label: "Brightness"
+    },
+    stroke: d => d3.interpolateViridis(d.brightness / 1000),
+    fill: d => d3.interpolateViridis(d.brightness / 1000),
+    r: 4,
+    marks: [
+        Plot.dot(data, {x: (d) => new Date(d.year,0,1), y: "brightness"})
+    ]
+})
+const div = document.querySelector("#plot");
+div.append(plot);
+
+// deal with locking the tooltip
+let tooltipLocked = false;
+const tooltipClose = document.getElementById("tooltip-close");
+tooltipClose.addEventListener("click", () => {
+    tooltipLocked = false;
+    tooltip.style.display = "none";
+});
+
+// D3 selection of the SVG
+const svg = div.querySelector("svg");
+const circles = svg.querySelectorAll("circle");
+const tooltip = document.getElementById("custom-tooltip");
+const tooltipImg = document.getElementById("tooltip-img");
+const tooltipText = document.getElementById("tooltip-text");
+
+
+
+
+// Bind full data to each circle using D3
+d3.selectAll(circles)
+.data(data)
+.on("mouseover", function(event, d) {
+    // Now `d` is the full data object
+    tooltipImg.src = d.url;
+    tooltipText.innerHTML = `
+    <strong>${d.title}</strong><br/>
+    Year: ${d.year}<br/>
+    Brightness: ${d.brightness}<br/>
+    <a href="/reader.php?id=${d.identifier}" target="_blank">View Pressbook</a>
+    `;
+    const tooltipHeight = tooltip.offsetHeight || 100;
+    tooltip.style.left = `${event.offsetX + 50}px`;
+    tooltip.style.top = `${event.offsetY - tooltipHeight / 2}px`;
+    tooltip.style.display = "block";
+    tooltip.classList.add("visible");
+})
+.on("mouseout", function() {
+    if (!tooltipLocked) {
+    tooltip.classList.remove("visible");
+    setTimeout(() => {
+        tooltip.style.display = "none";
+    }, 300); // match transition duration
+
+    }
+})
+.on("click", function(event, d) {
+    tooltipLocked = true;
+    tooltipImg.src = d.url;
+    tooltipText.innerHTML = `
+    <strong>${d.title}</strong><br/>
+    ${d.creator} (${d.year})<br/>
+    Computed Brightness: ${d.brightness}<br/>
+    Computed Contrast: ${d.contrast}<br/>
+    <a href="/reader.php?id=${d.identifier}" target="_blank">View Pressbook</a>
+    `;
+    const tooltipHeight = tooltip.offsetHeight || 100;
+    tooltip.style.left = `${event.offsetX + 10}px`;
+    tooltip.style.top = `${event.offsetY - tooltipHeight / 2}px`;
+    tooltip.style.display = "block";
+    tooltip.classList.add("visible");
+});
+
+// Make tooltip draggable:
+let isDragging = false;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+
+const tooltipHeader = document.getElementById("tooltip-header");
+
+tooltipHeader.addEventListener("mousedown", (event) => {
+isDragging = true;
+dragOffsetX = event.clientX - tooltip.offsetLeft;
+dragOffsetY = event.clientY - tooltip.offsetTop;
+event.preventDefault();
+});
+
+document.addEventListener("mousemove", (event) => {
+if (isDragging) {
+    tooltip.style.left = `${event.clientX - dragOffsetX}px`;
+    tooltip.style.top = `${event.clientY - dragOffsetY}px`;
+}
+});
+
+document.addEventListener("mouseup", () => {
+isDragging = false;
+});
+
+
+
+
+</script>
+<style>
+
+    #custom-tooltip {
+    transition: opacity 0.3s ease;
+    opacity: 0;
+    }
+    #custom-tooltip.visible {
+    opacity: 1;
+    }
+    #tooltip-header {
+        background-color: var(--dark-bg-color);
+        color: var(--dark-text-color);
+        text-align: center;
+        padding: 0.5em;
+    }
+    #tooltip-header, #tooltip-close{
+        pointer-events: auto;
+    }
+    #custom-tooltip a {
+        pointer-events: auto;
+    }
+
+</style>
